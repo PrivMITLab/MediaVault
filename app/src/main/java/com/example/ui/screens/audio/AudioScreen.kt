@@ -179,6 +179,20 @@ fun AudioScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Import Audio", fontWeight = FontWeight.Bold)
                     }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { viewModel.createDemoAudio() },
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("empty_state_demo_audio_btn")
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Generate Test Audio Track", fontSize = 12.sp)
+                    }
                 }
             }
         } else {

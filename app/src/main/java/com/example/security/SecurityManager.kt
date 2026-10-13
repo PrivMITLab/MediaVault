@@ -155,6 +155,15 @@ class SecurityManager(private val context: Context) {
         prefs.edit().putBoolean("screen_protection_enabled", enabled).apply()
     }
 
+    // Auto-Delete Originals from Phone Storage (Google Photos / Google Files Safe Folder style)
+    fun isDeleteOriginalsEnabled(): Boolean {
+        return prefs.getBoolean("delete_originals_after_import", true)
+    }
+
+    fun setDeleteOriginalsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("delete_originals_after_import", enabled).apply()
+    }
+
     // Biometrics
     fun isBiometricEnabled(): Boolean {
         return prefs.getBoolean(KEY_BIOMETRIC_ENABLED, false)

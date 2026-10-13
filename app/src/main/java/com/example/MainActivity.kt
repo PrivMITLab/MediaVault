@@ -2,12 +2,15 @@ package com.example
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -33,6 +36,7 @@ import com.example.data.model.MediaItem
 import com.example.data.model.MediaType
 import com.example.ui.components.AddToPlaylistDialog
 import com.example.ui.components.CreatePlaylistDialog
+import com.example.ui.components.DeviceAudioPickerDialog
 import com.example.ui.components.ImportProgressDialog
 import com.example.ui.components.ImportSourceDialog
 import com.example.ui.components.VaultBottomNavBar
@@ -84,7 +88,7 @@ class MainActivity : FragmentActivity() {
 
                 LaunchedEffect(pendingShareUris) {
                     if (pendingShareUris.isNotEmpty()) {
-                        viewModel.importUris(pendingShareUris) { success, _ ->
+                        viewModel.importUris(pendingShareUris) { success, _, _ ->
                             if (success > 0) {
                                 Toast.makeText(this@MainActivity, "Shared files saved to vault", Toast.LENGTH_SHORT).show()
                             }
@@ -174,6 +178,16 @@ fun MainVaultScaffold(
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showImportSourceDialog by remember { mutableStateOf(false) }
+    var showDeviceAudioPicker by remember { mutableStateOf(false) }
+
+    // System delete request launcher (Android 11+ Scoped Storage Google Photos / Gallery deletion)
+    val deleteRequestLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            Toast.makeText(app, "Original removed from device gallery", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     fun processImportedUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -191,19 +205,40 @@ fun MainVaultScaffold(
             VaultTab.PHOTOS -> MediaType.PHOTO
             else -> null
         }
-        viewModel.importUris(uris, targetType) { success, failed ->
+        viewModel.importUris(uris, targetType) { success, failed, deleteUris ->
             val typeLabel = when (selectedTab) {
                 VaultTab.AUDIO -> "audio file"
                 VaultTab.VIDEO -> "video"
                 VaultTab.PHOTOS -> "photo"
                 else -> "item"
             }
-            val msg = if (failed == 0) {
-                "Imported $success $typeLabel${if (success > 1) "s" else ""} into vault"
-            } else {
-                "Imported $success $typeLabel${if (success > 1) "s" else ""}, $failed failed"
+            if (success > 0) {
+                val shouldDeleteOriginals = app.securityManager.isDeleteOriginalsEnabled()
+                if (shouldDeleteOriginals && deleteUris.isNotEmpty()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try {
+                            val pi = MediaStore.createDeleteRequest(app.contentResolver, deleteUris)
+                            deleteRequestLauncher.launch(
+                                IntentSenderRequest.Builder(pi.intentSender).build()
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.w("MainActivity", "Failed to launch delete request: ${e.message}")
+                            Toast.makeText(app, "Imported $success $typeLabel${if (success > 1) "s" else ""} into vault", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(app, "Imported $success $typeLabel${if (success > 1) "s" else ""} & hidden in vault", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    val msg = if (failed == 0) {
+                        "Imported $success $typeLabel${if (success > 1) "s" else ""} into vault"
+                    } else {
+                        "Imported $success $typeLabel${if (success > 1) "s" else ""}, $failed failed"
+                    }
+                    Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()
+                }
+            } else if (failed > 0) {
+                Toast.makeText(app, "Failed to import selected files", Toast.LENGTH_SHORT).show()
             }
-            Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -221,7 +256,7 @@ fun MainVaultScaffold(
         processImportedUris(uris)
     }
 
-    // Universal Content Picker (For Audio / Music / Any files)
+    // Universal Content Picker (For Audio / Music / Any files fallback)
     val getContentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
@@ -256,17 +291,49 @@ fun MainVaultScaffold(
                     VaultTab.VIDEO -> photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                     )
-                    VaultTab.AUDIO -> getContentLauncher.launch("audio/*")
+                    VaultTab.AUDIO -> {
+                        showDeviceAudioPicker = true
+                    }
                     else -> getContentLauncher.launch("*/*")
                 }
             },
             onSelectFiles = {
                 showImportSourceDialog = false
                 when (selectedTab) {
-                    VaultTab.PHOTOS -> documentLauncher.launch(arrayOf("image/*", "*/*"))
-                    VaultTab.VIDEO -> documentLauncher.launch(arrayOf("video/*", "*/*"))
-                    VaultTab.AUDIO -> documentLauncher.launch(arrayOf("audio/*", "*/*"))
+                    VaultTab.PHOTOS -> documentLauncher.launch(arrayOf("image/*"))
+                    VaultTab.VIDEO -> documentLauncher.launch(arrayOf("video/*"))
+                    VaultTab.AUDIO -> documentLauncher.launch(
+                        arrayOf("audio/*", "*/*")
+                    )
                     else -> documentLauncher.launch(arrayOf("*/*"))
+                }
+            },
+            onCreateDemoAudio = {
+                showImportSourceDialog = false
+                viewModel.createDemoAudio { item ->
+                    Toast.makeText(app, "Added '${item.displayTitle}' to Audio Vault", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    // Device Audio Picker Dialog (Displays all songs & recordings on the phone)
+    if (showDeviceAudioPicker) {
+        DeviceAudioPickerDialog(
+            onDismiss = { showDeviceAudioPicker = false },
+            onImportSelected = { uris ->
+                showDeviceAudioPicker = false
+                processImportedUris(uris)
+            },
+            onBrowseFiles = {
+                showDeviceAudioPicker = false
+                documentLauncher.launch(
+                    arrayOf("audio/*", "*/*")
+                )
+            },
+            onCreateDemoAudio = {
+                viewModel.createDemoAudio { item ->
+                    Toast.makeText(app, "Added '${item.displayTitle}' to Audio Vault", Toast.LENGTH_SHORT).show()
                 }
             }
         )

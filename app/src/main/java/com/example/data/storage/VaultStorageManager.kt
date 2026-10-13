@@ -101,7 +101,72 @@ class VaultStorageManager(private val context: Context) {
             }
         } ?: throw IllegalStateException("Failed to open input stream for $uri")
 
-        // Attempt to remove original file from public storage / media store
+        // Accurately verify actual media container and streams from written bytes
+        var verifiedMediaType = mediaType
+        var verifiedMime = detectedMime
+        var verifiedExt = finalExt
+
+        val retriever = android.media.MediaMetadataRetriever()
+        var hasVideoTrack = false
+        var hasAudioTrack = false
+        try {
+            retriever.setDataSource(destinationFile.absolutePath)
+            hasVideoTrack = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) != null
+            hasAudioTrack = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) != null
+            val extractedMime = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+            if (!extractedMime.isNullOrBlank()) {
+                verifiedMime = extractedMime
+            }
+        } catch (_: Exception) {
+            // Non-media or plain image files
+        } finally {
+            try { retriever.release() } catch (_: Exception) {}
+        }
+
+        if (hasVideoTrack) {
+            verifiedMediaType = MediaType.VIDEO
+            if (!verifiedMime.startsWith("video/")) verifiedMime = "video/mp4"
+            verifiedExt = "mp4"
+        } else if (hasAudioTrack || targetMediaTypeHint == MediaType.AUDIO) {
+            verifiedMediaType = MediaType.AUDIO
+            if (!verifiedMime.startsWith("audio/")) verifiedMime = "audio/mpeg"
+            if (verifiedExt == "jpg" || verifiedExt == "jpeg" || verifiedExt == "png" || verifiedExt == "bin") {
+                verifiedExt = "mp3"
+            }
+        } else if (targetMediaTypeHint == MediaType.VIDEO) {
+            verifiedMediaType = MediaType.VIDEO
+            if (!verifiedMime.startsWith("video/")) verifiedMime = "video/mp4"
+            if (verifiedExt == "jpg" || verifiedExt == "jpeg" || verifiedExt == "png") {
+                verifiedExt = "mp4"
+            }
+        }
+
+        // Ensure extension on disk aligns with verified media type so ExoPlayer and Coil decode properly
+        var finalDestinationFile = destinationFile
+        var resolvedFileName = finalFileName
+        if (!finalDestinationFile.name.endsWith(".$verifiedExt", ignoreCase = true)) {
+            val baseWithoutExt = finalDestinationFile.name.substringBeforeLast('.')
+            val newFile = File(vaultDir, "$baseWithoutExt.$verifiedExt")
+            if (destinationFile.renameTo(newFile)) {
+                finalDestinationFile = newFile
+                resolvedFileName = "${sanitizedBase}.$verifiedExt"
+            }
+        }
+
+        // Check if URI is already a MediaStore URI or query underlying MediaStore item
+        val isDirectMediaStoreUri = uri.toString().startsWith("content://media/external/")
+        val mediaStoreUri = if (isDirectMediaStoreUri) {
+            uri
+        } else {
+            DeviceMediaScanner.findUnderlyingMediaStoreUri(
+                context = context,
+                originalName = originalName,
+                sizeBytes = reportedSize.coerceAtLeast(bytesCopied),
+                mediaType = verifiedMediaType
+            )
+        }
+
+        // Attempt to remove original file from public storage / media store (direct delete attempt)
         var deletedOriginal = false
         try {
             deletedOriginal = DocumentsContract.deleteDocument(contentResolver, uri)
@@ -114,13 +179,36 @@ class VaultStorageManager(private val context: Context) {
             } catch (_: Exception) {}
         }
 
+        if (!deletedOriginal && mediaStoreUri != null && mediaStoreUri != uri) {
+            try {
+                val rows = contentResolver.delete(mediaStoreUri, null, null)
+                deletedOriginal = rows > 0
+            } catch (_: Exception) {}
+        }
+
         ImportedFileResult(
-            file = destinationFile,
-            originalName = finalFileName,
-            mimeType = detectedMime,
-            mediaType = mediaType,
-            sizeBytes = destinationFile.length(),
-            deletedOriginal = deletedOriginal
+            file = finalDestinationFile,
+            originalName = resolvedFileName,
+            mimeType = verifiedMime,
+            mediaType = verifiedMediaType,
+            sizeBytes = finalDestinationFile.length(),
+            deletedOriginal = deletedOriginal,
+            sourceUri = uri,
+            mediaStoreUri = mediaStoreUri
+        )
+    }
+
+    suspend fun createDemoAudio(title: String = "Secret Voice Note"): ImportedFileResult = withContext(Dispatchers.IO) {
+        val file = DeviceMediaScanner.generateDemoAudioFile(vaultDir, title)
+        ImportedFileResult(
+            file = file,
+            originalName = file.name,
+            mimeType = "audio/wav",
+            mediaType = MediaType.AUDIO,
+            sizeBytes = file.length(),
+            deletedOriginal = true,
+            sourceUri = Uri.fromFile(file),
+            mediaStoreUri = null
         )
     }
 
@@ -175,32 +263,40 @@ class VaultStorageManager(private val context: Context) {
             val lowerMime = mimeType.lowercase()
             val lowerName = fileName.lowercase()
 
-            val isAudio = lowerMime.startsWith("audio/") ||
+            val isExplicitAudio = lowerMime.startsWith("audio/") ||
                     lowerName.endsWith(".mp3") || lowerName.endsWith(".aac") ||
                     lowerName.endsWith(".wav") || lowerName.endsWith(".ogg") ||
                     lowerName.endsWith(".flac") || lowerName.endsWith(".m4a") ||
                     lowerName.endsWith(".wma") || lowerName.endsWith(".opus") ||
                     lowerName.endsWith(".amr") || lowerName.endsWith(".mid") ||
-                    lowerName.endsWith(".midi") || lowerName.endsWith(".aiff")
+                    lowerName.endsWith(".midi") || lowerName.endsWith(".aiff") ||
+                    lowerName.endsWith(".m4b") || lowerName.endsWith(".mpga")
 
-            val isVideo = lowerMime.startsWith("video/") ||
+            val isExplicitVideo = lowerMime.startsWith("video/") ||
                     lowerName.endsWith(".mp4") || lowerName.endsWith(".mkv") ||
                     lowerName.endsWith(".avi") || lowerName.endsWith(".mov") ||
                     lowerName.endsWith(".webm") || lowerName.endsWith(".3gp") ||
                     lowerName.endsWith(".m4v") || lowerName.endsWith(".ts") ||
                     lowerName.endsWith(".flv") || lowerName.endsWith(".wmv")
 
-            val isPhoto = lowerMime.startsWith("image/") ||
+            val isExplicitPhoto = lowerMime.startsWith("image/") ||
                     lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") ||
                     lowerName.endsWith(".png") || lowerName.endsWith(".gif") ||
                     lowerName.endsWith(".webp") || lowerName.endsWith(".bmp") ||
                     lowerName.endsWith(".heic") || lowerName.endsWith(".heif") ||
                     lowerName.endsWith(".svg")
 
+            // Hint from current screen tab takes precedence unless completely conflicting
+            if (hint != null) {
+                if (hint == MediaType.AUDIO && !isExplicitPhoto) return MediaType.AUDIO
+                if (hint == MediaType.VIDEO && !isExplicitPhoto && !isExplicitAudio) return MediaType.VIDEO
+                if (hint == MediaType.PHOTO && !isExplicitAudio && !isExplicitVideo) return MediaType.PHOTO
+            }
+
             return when {
-                isAudio -> MediaType.AUDIO
-                isVideo -> MediaType.VIDEO
-                isPhoto -> MediaType.PHOTO
+                isExplicitAudio -> MediaType.AUDIO
+                isExplicitVideo -> MediaType.VIDEO
+                isExplicitPhoto -> MediaType.PHOTO
                 hint != null -> hint
                 else -> MediaType.PHOTO
             }
@@ -275,5 +371,7 @@ data class ImportedFileResult(
     val mimeType: String,
     val mediaType: MediaType,
     val sizeBytes: Long,
-    val deletedOriginal: Boolean
+    val deletedOriginal: Boolean,
+    val sourceUri: Uri? = null,
+    val mediaStoreUri: Uri? = null
 )

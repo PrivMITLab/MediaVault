@@ -507,7 +507,8 @@ fun ImportSourceDialog(
     tab: com.example.ui.viewmodel.VaultTab,
     onDismiss: () -> Unit,
     onSelectGallery: () -> Unit,
-    onSelectFiles: () -> Unit
+    onSelectFiles: () -> Unit,
+    onCreateDemoAudio: (() -> Unit)? = null
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -521,10 +522,10 @@ fun ImportSourceDialog(
                 )
                 Text(
                     text = when (tab) {
-                        com.example.ui.viewmodel.VaultTab.AUDIO -> "Import Audio"
-                        com.example.ui.viewmodel.VaultTab.VIDEO -> "Import Video"
-                        com.example.ui.viewmodel.VaultTab.PHOTOS -> "Import Photos"
-                        else -> "Import Media"
+                        com.example.ui.viewmodel.VaultTab.AUDIO -> "Import Audio into Vault"
+                        com.example.ui.viewmodel.VaultTab.VIDEO -> "Import Video into Vault"
+                        com.example.ui.viewmodel.VaultTab.PHOTOS -> "Import Photos into Vault"
+                        else -> "Import Media into Vault"
                     },
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -537,10 +538,12 @@ fun ImportSourceDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Choose source to import into vault:",
+                    "Choose how you want to add items to your vault:",
                     color = TextSecondary,
-                    fontSize = 14.sp
+                    fontSize = 13.sp
                 )
+
+                // Option 1: Gallery / Device Media Scanner
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -563,13 +566,13 @@ fun ImportSourceDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = if (tab == com.example.ui.viewmodel.VaultTab.AUDIO) "Audio / Music Picker" else "Gallery / Media Photos & Videos",
+                                text = if (tab == com.example.ui.viewmodel.VaultTab.AUDIO) "Device Audio & Music Scanner" else "Device Gallery (Photos & Videos)",
                                 color = TextPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = if (tab == com.example.ui.viewmodel.VaultTab.AUDIO) "Select songs, voice notes, audio files" else "Select pictures or videos directly",
+                                text = if (tab == com.example.ui.viewmodel.VaultTab.AUDIO) "Scan and select songs & voice notes on device" else "Select pictures or videos directly from camera roll",
                                 color = TextMuted,
                                 fontSize = 12.sp
                             )
@@ -577,6 +580,7 @@ fun ImportSourceDialog(
                     }
                 }
 
+                // Option 2: Files / Documents
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -605,12 +609,66 @@ fun ImportSourceDialog(
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "Browse file manager, downloads, SD card",
+                                text = "Browse downloads, file manager, SD card",
                                 color = TextMuted,
                                 fontSize = 12.sp
                             )
                         }
                     }
+                }
+
+                // Option 3: Demo / Test Audio (for emulator or instant test)
+                if (tab == com.example.ui.viewmodel.VaultTab.AUDIO && onCreateDemoAudio != null) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onCreateDemoAudio() }
+                            .testTag("import_source_demo_audio"),
+                        color = Color(0xFF161A23),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Generate Demo Voice Memo",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "Instant test recording (ideal for emulators)",
+                                    color = TextMuted,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Privacy guarantee note
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF0F172A), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Text(
+                        text = "🔒 Safe Vault Security: Like Google Photos Locked Folder, imported files are kept in an isolated encrypted vault with .nomedia protection.",
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
                 }
             }
         },

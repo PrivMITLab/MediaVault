@@ -74,15 +74,16 @@ class MediaPlaybackService : MediaSessionService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        if (::player.isInitialized && player.isPlaying) {
-            startForegroundPlaybackNotification()
-        }
+        // Must call startForeground immediately to satisfy Android's 5-second startForegroundService contract
+        startForegroundPlaybackNotification()
         return START_STICKY
     }
 
     private fun buildNotification(): Notification {
-        val currentTitle = player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "MediaVault Playback"
-        val currentArtist = player.currentMediaItem?.mediaMetadata?.artist?.toString() ?: "Private Vault"
+        val isInitialized = ::player.isInitialized
+        val currentTitle = if (isInitialized) player.currentMediaItem?.mediaMetadata?.title?.toString() ?: "MediaVault Playback" else "MediaVault Playback"
+        val currentArtist = if (isInitialized) player.currentMediaItem?.mediaMetadata?.artist?.toString() ?: "Private Vault" else "Private Vault"
+        val isPlayingNow = if (isInitialized) player.isPlaying else false
 
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -99,7 +100,7 @@ class MediaPlaybackService : MediaSessionService() {
             .setContentText(currentArtist)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(pendingIntent)
-            .setOngoing(player.isPlaying)
+            .setOngoing(isPlayingNow)
             .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

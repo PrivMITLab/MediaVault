@@ -93,7 +93,14 @@ fun VideoPlayerScreen(
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            val media3Item = Media3Item.fromUri(Uri.fromFile(File(videoItem.filePath)))
+            val media3Item = Media3Item.Builder()
+                .setUri(Uri.fromFile(File(videoItem.filePath)))
+                .apply {
+                    if (videoItem.mimeType.isNotBlank() && videoItem.mimeType.startsWith("video/")) {
+                        setMimeType(videoItem.mimeType)
+                    }
+                }
+                .build()
             setMediaItem(media3Item)
             prepare()
             playWhenReady = true

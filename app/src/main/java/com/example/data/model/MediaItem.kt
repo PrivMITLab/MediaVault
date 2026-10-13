@@ -25,4 +25,9 @@ data class MediaItem(
 ) {
     val displayTitle: String
         get() = title?.takeIf { it.isNotBlank() } ?: fileName
+
+    val encryptedPath: String
+        get() = filePath
 }
+
+typealias MediaFile = MediaItem

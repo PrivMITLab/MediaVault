@@ -119,6 +119,12 @@ class PlayerManager private constructor(private val context: Context) {
                     _currentMediaItem.value = _queue.value[index]
                 }
             }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("PlayerManager", "Playback error: ${error.message}", error)
+                _isPlaying.value = false
+                stopProgressTracker()
+            }
         })
     }
 
@@ -162,6 +168,11 @@ class PlayerManager private constructor(private val context: Context) {
 
             Media3Item.Builder()
                 .setUri(Uri.fromFile(File(media.filePath)))
+                .apply {
+                    if (media.mimeType.isNotBlank() && media.mimeType.startsWith("audio/")) {
+                        setMimeType(media.mimeType)
+                    }
+                }
                 .setMediaId(media.id.toString())
                 .setMediaMetadata(metadata)
                 .build()

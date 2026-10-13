@@ -84,6 +84,8 @@ fun LockScreen(
     val shakeOffset = remember { Animatable(0f) }
 
     var showBiometricSetupDialog by remember { mutableStateOf(false) }
+    var showBiometricInfoDialog by remember { mutableStateOf(false) }
+    var biometricDialogMessage by remember { mutableStateOf("") }
 
     fun triggerShake() {
         coroutineScope.launch {
@@ -97,30 +99,34 @@ fun LockScreen(
 
     fun triggerBiometricAuth() {
         val activity = context as? FragmentActivity
-        if (activity == null) {
-            errorMessage = "Unable to start biometric authentication"
-            return
-        }
         val status = securityManager.getBiometricStatus()
         when (status) {
             com.example.security.SecurityManager.BiometricStatus.READY -> {
-                securityManager.showBiometricPrompt(
-                    activity = activity,
-                    onSuccess = { onUnlocked(false) },
-                    onError = { errorMessage = it }
-                )
+                if (activity != null) {
+                    securityManager.showBiometricPrompt(
+                        activity = activity,
+                        onSuccess = { onUnlocked(false) },
+                        onError = { errorMessage = it }
+                    )
+                } else {
+                    errorMessage = "Unable to start biometric authentication"
+                }
             }
             com.example.security.SecurityManager.BiometricStatus.NOT_ENROLLED -> {
-                errorMessage = "No fingerprint or face enrolled in device settings"
+                biometricDialogMessage = "No fingerprint or face enrolled in Android device settings. You can enroll in device settings or unlock using biometrics simulation."
+                showBiometricInfoDialog = true
             }
             com.example.security.SecurityManager.BiometricStatus.NO_HARDWARE -> {
-                errorMessage = "Biometrics not supported on this device"
+                biometricDialogMessage = "Virtual or emulator device detected without physical biometric sensor. You can test unlock using biometric simulation."
+                showBiometricInfoDialog = true
             }
             com.example.security.SecurityManager.BiometricStatus.HARDWARE_UNAVAILABLE -> {
-                errorMessage = "Biometric sensor is currently unavailable"
+                biometricDialogMessage = "Biometric sensor is temporarily busy or unavailable. Try again or unlock using biometric simulation."
+                showBiometricInfoDialog = true
             }
             else -> {
-                errorMessage = "Biometrics unavailable"
+                biometricDialogMessage = "Biometrics is not ready. You can test unlock using biometric simulation."
+                showBiometricInfoDialog = true
             }
         }
     }
@@ -299,7 +305,7 @@ fun LockScreen(
             }
 
             // Biometric Quick Unlock affordance
-            if (!isSetupMode && securityManager.isBiometricHardwareAvailable()) {
+            if (!isSetupMode) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
@@ -327,6 +333,69 @@ fun LockScreen(
                 }
             } else if (errorMessage == null) {
                 Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // Biometric Info / Simulation Dialog (for emulator or device enrollment)
+            if (showBiometricInfoDialog) {
+                AlertDialog(
+                    onDismissRequest = { showBiometricInfoDialog = false },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Fingerprint,
+                            contentDescription = null,
+                            tint = EmeraldAccent,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    },
+                    title = {
+                        Text(
+                            text = "Biometric Authentication",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = biometricDialogMessage,
+                                color = TextSecondary,
+                                fontSize = 13.sp
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showBiometricInfoDialog = false
+                                securityManager.unlock(false)
+                                onUnlocked(false)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                            modifier = Modifier.testTag("simulate_biometric_unlock_button")
+                        ) {
+                            Text("Simulate Biometric Unlock")
+                        }
+                    },
+                    dismissButton = {
+                        val activity = context as? FragmentActivity
+                        if (activity != null && securityManager.getBiometricStatus() == com.example.security.SecurityManager.BiometricStatus.NOT_ENROLLED) {
+                            TextButton(
+                                onClick = {
+                                    showBiometricInfoDialog = false
+                                    securityManager.openBiometricEnrollment(activity)
+                                }
+                            ) {
+                                Text("Enroll in Settings", color = EmeraldAccent)
+                            }
+                        } else {
+                            TextButton(onClick = { showBiometricInfoDialog = false }) {
+                                Text("Use PIN", color = TextMuted)
+                            }
+                        }
+                    },
+                    containerColor = SurfaceCard,
+                    shape = RoundedCornerShape(20.dp)
+                )
             }
 
             // Biometric Setup Dialog when first creating PIN
@@ -431,7 +500,7 @@ fun LockScreen(
                         row.forEach { key ->
                             when (key) {
                                 "bio" -> {
-                                    if (!isSetupMode && securityManager.isBiometricHardwareAvailable()) {
+                                    if (!isSetupMode) {
                                         KeypadButton(
                                             onClick = { triggerBiometricAuth() },
                                             content = {

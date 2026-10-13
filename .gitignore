@@ -16,3 +16,5 @@
 local.properties
 .env
 debug.keystore
+.aistudio/artifacts/brain/99b439da-7340-4d93-910d-f1270c3a5418
+.aistudio

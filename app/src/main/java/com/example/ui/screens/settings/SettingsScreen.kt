@@ -529,6 +529,38 @@ fun SettingsScreen(
                         )
                     )
                 }
+
+                // Safe Hide from Gallery / Google Photos (Locked Folder Mode)
+                var deleteOriginalsEnabled by remember { mutableStateOf(securityManager.isDeleteOriginalsEnabled()) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.VisibilityOff, contentDescription = null, tint = IndigoPrimary)
+                        Column(modifier = Modifier.padding(start = 12.dp)) {
+                            Text("Hide from Phone Gallery", color = TextPrimary, fontWeight = FontWeight.Medium)
+                            Text("Delete originals from Google Photos & device storage after moving into vault", color = TextMuted, fontSize = 12.sp)
+                        }
+                    }
+                    Switch(
+                        checked = deleteOriginalsEnabled,
+                        onCheckedChange = { enabled ->
+                            securityManager.setDeleteOriginalsEnabled(enabled)
+                            deleteOriginalsEnabled = enabled
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = IndigoPrimary
+                        )
+                    )
+                }
             }
         }
 

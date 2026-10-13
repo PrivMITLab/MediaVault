@@ -47,7 +47,7 @@ class VaultRepository(
         uri: Uri,
         targetMediaTypeHint: MediaType? = null,
         onProgress: ((copied: Long, total: Long) -> Unit)? = null
-    ): MediaItem = withContext(Dispatchers.IO) {
+    ): ImportedItemResult = withContext(Dispatchers.IO) {
         val result = storageManager.importFile(uri, targetMediaTypeHint, onProgress)
         val extractedMetadata = extractMetadata(result)
         val entity = MediaItem(
@@ -62,6 +62,24 @@ class VaultRepository(
             album = extractedMetadata.album,
             width = extractedMetadata.width,
             height = extractedMetadata.height,
+            dateAdded = System.currentTimeMillis()
+        )
+        val id = mediaDao.insertItem(entity)
+        ImportedItemResult(entity.copy(id = id), result)
+    }
+
+    suspend fun createDemoAudio(title: String = "Secret Voice Note"): MediaItem = withContext(Dispatchers.IO) {
+        val result = storageManager.createDemoAudio(title)
+        val entity = MediaItem(
+            filePath = result.file.absolutePath,
+            fileName = result.originalName,
+            mediaType = MediaType.AUDIO,
+            mimeType = "audio/wav",
+            sizeBytes = result.sizeBytes,
+            durationMs = 5000L,
+            title = title,
+            artist = "MediaVault Voice Memo",
+            album = "Secret Audio",
             dateAdded = System.currentTimeMillis()
         )
         val id = mediaDao.insertItem(entity)
@@ -180,3 +198,8 @@ class VaultRepository(
         val height: Int
     )
 }
+
+data class ImportedItemResult(
+    val item: MediaItem,
+    val result: ImportedFileResult
+)

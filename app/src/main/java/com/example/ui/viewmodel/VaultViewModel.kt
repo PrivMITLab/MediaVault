@@ -226,7 +226,7 @@ class VaultViewModel(
     fun importUris(
         uris: List<Uri>,
         targetType: MediaType? = null,
-        onComplete: ((success: Int, failed: Int) -> Unit)? = null
+        onComplete: ((success: Int, failed: Int, deleteUris: List<Uri>) -> Unit)? = null
     ) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
@@ -240,17 +240,24 @@ class VaultViewModel(
 
             var successCount = 0
             var failedCount = 0
+            val deleteUris = mutableListOf<Uri>()
 
             uris.forEachIndexed { index, uri ->
                 _importProgress.value = _importProgress.value.copy(currentFileIndex = index + 1)
                 try {
-                    repository.importFile(uri, targetType) { copied, total ->
+                    val imported = repository.importFile(uri, targetType) { copied, total ->
                         _importProgress.value = _importProgress.value.copy(
                             bytesCopied = copied,
                             totalBytes = total
                         )
                     }
                     successCount++
+                    if (!imported.result.deletedOriginal) {
+                        val toDelete = imported.result.mediaStoreUri ?: imported.result.sourceUri
+                        if (toDelete != null) {
+                            deleteUris.add(toDelete)
+                        }
+                    }
                 } catch (e: Exception) {
                     android.util.Log.e("VaultViewModel", "Failed to import uri: $uri", e)
                     failedCount++
@@ -258,7 +265,14 @@ class VaultViewModel(
             }
 
             _importProgress.value = ImportProgressState(isImporting = false)
-            onComplete?.invoke(successCount, failedCount)
+            onComplete?.invoke(successCount, failedCount, deleteUris)
+        }
+    }
+
+    fun createDemoAudio(title: String = "Secret Voice Note", onComplete: ((MediaItem) -> Unit)? = null) {
+        viewModelScope.launch {
+            val item = repository.createDemoAudio(title)
+            onComplete?.invoke(item)
         }
     }
 
