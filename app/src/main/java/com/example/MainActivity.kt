@@ -1,6 +1,8 @@
 package com.example
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -180,6 +183,36 @@ fun MainVaultScaffold(
     var showImportSourceDialog by remember { mutableStateOf(false) }
     var showDeviceAudioPicker by remember { mutableStateOf(false) }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> }
+
+    fun checkAndRequestMediaPermissions() {
+        val needed = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(Manifest.permission.READ_MEDIA_AUDIO)
+            }
+            if (ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(Manifest.permission.READ_MEDIA_VIDEO)
+            }
+            if (ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(Manifest.permission.READ_MEDIA_IMAGES)
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(app, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+        }
+        if (needed.isNotEmpty()) {
+            permissionLauncher.launch(needed.toTypedArray())
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        checkAndRequestMediaPermissions()
+    }
+
     // System delete request launcher (Android 11+ Scoped Storage Google Photos / Gallery deletion)
     val deleteRequestLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -302,11 +335,13 @@ fun MainVaultScaffold(
                 when (selectedTab) {
                     VaultTab.PHOTOS -> documentLauncher.launch(arrayOf("image/*"))
                     VaultTab.VIDEO -> documentLauncher.launch(arrayOf("video/*"))
-                    VaultTab.AUDIO -> documentLauncher.launch(
-                        arrayOf("audio/*", "*/*")
-                    )
+                    VaultTab.AUDIO -> documentLauncher.launch(arrayOf("audio/*"))
                     else -> documentLauncher.launch(arrayOf("*/*"))
                 }
+            },
+            onSelectAudioPicker = {
+                showImportSourceDialog = false
+                getContentLauncher.launch("audio/*")
             },
             onCreateDemoAudio = {
                 showImportSourceDialog = false
@@ -423,7 +458,20 @@ fun MainVaultScaffold(
                         }
                         viewModel.batchDeleteSelected(currentList)
                     },
-                    onBatchAddToPlaylist = { showAddToPlaylistDialog = true }
+                    onBatchAddToPlaylist = { showAddToPlaylistDialog = true },
+                    onBatchRestore = {
+                        val currentList = when (selectedTab) {
+                            VaultTab.AUDIO -> viewModel.filteredAudio.value
+                            VaultTab.VIDEO -> viewModel.filteredVideos.value
+                            VaultTab.PHOTOS -> viewModel.filteredPhotos.value
+                            else -> emptyList()
+                        }
+                        viewModel.batchRestoreSelected(currentList) { success, _ ->
+                            if (success > 0) {
+                                Toast.makeText(app, "Restored $success item${if (success > 1) "s" else ""} back to gallery", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
                 )
             }
         },

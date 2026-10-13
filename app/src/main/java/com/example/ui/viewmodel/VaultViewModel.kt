@@ -311,6 +311,31 @@ class VaultViewModel(
         }
     }
 
+    fun restoreItemToGallery(item: MediaItem, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = repository.restoreItemToGallery(item)
+            onResult(success)
+        }
+    }
+
+    fun batchRestoreSelected(allItems: List<MediaItem>, onComplete: (Int, Int) -> Unit) {
+        val selectedIds = _selectedItemIds.value
+        val itemsToRestore = allItems.filter { selectedIds.contains(it.id) }
+        viewModelScope.launch {
+            var success = 0
+            var failed = 0
+            itemsToRestore.forEach { item ->
+                if (repository.restoreItemToGallery(item)) {
+                    success++
+                } else {
+                    failed++
+                }
+            }
+            clearSelection()
+            onComplete(success, failed)
+        }
+    }
+
     fun triggerPanicWipe(onWiped: () -> Unit) {
         viewModelScope.launch {
             repository.clearVault()

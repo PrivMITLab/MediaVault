@@ -58,12 +58,23 @@ fun VideoScreen(
     var activePlayingVideo by remember { mutableStateOf<MediaItem?>(null) }
     var infoItem by remember { mutableStateOf<MediaItem?>(null) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     if (infoItem != null) {
         FileInfoDialog(
             item = infoItem!!,
             onDismiss = { infoItem = null },
             onExport = {
                 onExportItem(infoItem!!)
+                infoItem = null
+            },
+            onRestore = {
+                val toRestore = infoItem!!
+                viewModel.restoreItemToGallery(toRestore) { success ->
+                    if (success) {
+                        android.widget.Toast.makeText(context, "Restored video back to gallery", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
                 infoItem = null
             }
         )
@@ -192,7 +203,14 @@ fun VideoScreen(
                             onToggleFavorite = { viewModel.toggleFavorite(item) },
                             onInfoClick = { infoItem = item },
                             onDeleteClick = { viewModel.deleteItem(item) },
-                            onExportClick = { onExportItem(item) }
+                            onExportClick = { onExportItem(item) },
+                            onRestoreClick = {
+                                viewModel.restoreItemToGallery(item) { success ->
+                                    if (success) {
+                                        android.widget.Toast.makeText(context, "Restored video back to gallery", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
                         )
                     }
                 }

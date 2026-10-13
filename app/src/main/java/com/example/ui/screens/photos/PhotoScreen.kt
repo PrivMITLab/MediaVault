@@ -50,6 +50,7 @@ fun PhotoScreen(
     val selectedIds by viewModel.selectedItemIds.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     var viewingPhotoIndex by remember { mutableIntStateOf(-1) }
 
     if (viewingPhotoIndex in photos.indices) {
@@ -58,7 +59,14 @@ fun PhotoScreen(
             initialIndex = viewingPhotoIndex,
             onDismiss = { viewingPhotoIndex = -1 },
             onDeletePhoto = { viewModel.deleteItem(it) },
-            onExportPhoto = onExportItem
+            onExportPhoto = onExportItem,
+            onRestorePhoto = { item ->
+                viewModel.restoreItemToGallery(item) { success ->
+                    if (success) {
+                        android.widget.Toast.makeText(context, "Restored photo back to gallery", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         )
     }
 

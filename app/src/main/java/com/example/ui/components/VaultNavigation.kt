@@ -81,7 +81,8 @@ fun VaultTopBar(
     onClearSelection: () -> Unit,
     onBatchFavorite: () -> Unit,
     onBatchDelete: () -> Unit,
-    onBatchAddToPlaylist: () -> Unit
+    onBatchAddToPlaylist: () -> Unit,
+    onBatchRestore: (() -> Unit)? = null
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
@@ -104,6 +105,11 @@ fun VaultTopBar(
                 actions = {
                     IconButton(onClick = onSelectAll) {
                         Icon(imageVector = Icons.Default.SelectAll, contentDescription = "Select All", tint = TextPrimary)
+                    }
+                    if (onBatchRestore != null) {
+                        IconButton(onClick = onBatchRestore) {
+                            Icon(imageVector = Icons.Default.Lock, contentDescription = "Unhide to Gallery", tint = EmeraldAccent)
+                        }
                     }
                     IconButton(onClick = onBatchFavorite) {
                         Icon(imageVector = Icons.Default.Favorite, contentDescription = "Favorite Selected", tint = RoseError)

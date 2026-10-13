@@ -74,6 +74,7 @@ fun MediaListItem(
     onInfoClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onExportClick: () -> Unit,
+    onRestoreClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -221,6 +222,13 @@ fun MediaListItem(
                         onClick = {
                             menuExpanded = false
                             onInfoClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Unhide to Gallery", color = EmeraldAccent) },
+                        onClick = {
+                            menuExpanded = false
+                            onRestoreClick?.invoke()
                         }
                     )
                     DropdownMenuItem(

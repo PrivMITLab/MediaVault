@@ -16,9 +16,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -64,7 +66,8 @@ import java.util.Locale
 fun FileInfoDialog(
     item: MediaItem,
     onDismiss: () -> Unit,
-    onExport: () -> Unit
+    onExport: () -> Unit,
+    onRestore: (() -> Unit)? = null
 ) {
     val dateStr = remember(item.dateAdded) {
         val sdf = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
@@ -121,12 +124,23 @@ fun FileInfoDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = onExport,
-                colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
-                modifier = Modifier.testTag("export_file_button")
-            ) {
-                Text("Export File")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onRestore != null) {
+                    Button(
+                        onClick = onRestore,
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
+                        modifier = Modifier.testTag("restore_gallery_button")
+                    ) {
+                        Text("Unhide to Gallery", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Button(
+                    onClick = onExport,
+                    colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                    modifier = Modifier.testTag("export_file_button")
+                ) {
+                    Text("Export File")
+                }
             }
         },
         dismissButton = {
@@ -508,6 +522,7 @@ fun ImportSourceDialog(
     onDismiss: () -> Unit,
     onSelectGallery: () -> Unit,
     onSelectFiles: () -> Unit,
+    onSelectAudioPicker: (() -> Unit)? = null,
     onCreateDemoAudio: (() -> Unit)? = null
 ) {
     AlertDialog(
@@ -543,7 +558,46 @@ fun ImportSourceDialog(
                     fontSize = 13.sp
                 )
 
-                // Option 1: Gallery / Device Media Scanner
+                // Option 1: System Audio Picker (if tab == AUDIO)
+                if (tab == com.example.ui.viewmodel.VaultTab.AUDIO && onSelectAudioPicker != null) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelectAudioPicker() }
+                            .testTag("import_source_audio_picker"),
+                        color = Color(0xFF161A23),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = EmeraldAccent,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "System Audio & Music Picker",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "Select MP3, WAV, AAC, M4A or recordings directly",
+                                    color = TextMuted,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Option 2: Gallery / Device Media Scanner
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -580,7 +634,7 @@ fun ImportSourceDialog(
                     }
                 }
 
-                // Option 2: Files / Documents
+                // Option 3: Files / Documents
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -597,7 +651,7 @@ fun ImportSourceDialog(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = EmeraldAccent,
+                            tint = Color(0xFF818CF8),
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))

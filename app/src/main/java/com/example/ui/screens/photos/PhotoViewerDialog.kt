@@ -56,7 +56,8 @@ fun PhotoViewerDialog(
     initialIndex: Int,
     onDismiss: () -> Unit,
     onDeletePhoto: (MediaItem) -> Unit,
-    onExportPhoto: (MediaItem) -> Unit
+    onExportPhoto: (MediaItem) -> Unit,
+    onRestorePhoto: ((MediaItem) -> Unit)? = null
 ) {
     val context = LocalContext.current
     BackHandler(onBack = onDismiss)
@@ -76,6 +77,11 @@ fun PhotoViewerDialog(
             onExport = {
                 onExportPhoto(currentPhoto)
                 showInfoDialog = false
+            },
+            onRestore = {
+                onRestorePhoto?.invoke(currentPhoto)
+                showInfoDialog = false
+                if (photos.size <= 1) onDismiss()
             }
         )
     }

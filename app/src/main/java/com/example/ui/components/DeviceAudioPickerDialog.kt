@@ -66,6 +66,13 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+
 @Composable
 fun DeviceAudioPickerDialog(
     onDismiss: () -> Unit,
@@ -79,12 +86,45 @@ fun DeviceAudioPickerDialog(
     val audioTracks = remember { mutableStateListOf<DeviceAudioTrack>() }
     val selectedUris = remember { mutableStateListOf<Uri>() }
 
-    LaunchedEffect(Unit) {
-        isLoading = true
-        val tracks = DeviceMediaScanner.queryDeviceAudio(context)
-        audioTracks.clear()
-        audioTracks.addAll(tracks)
-        isLoading = false
+    val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    var hasPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    fun loadTracks() {
+        coroutineScope.launch {
+            isLoading = true
+            val tracks = DeviceMediaScanner.queryDeviceAudio(context)
+            audioTracks.clear()
+            audioTracks.addAll(tracks)
+            isLoading = false
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasPermission = granted
+        if (granted) {
+            loadTracks()
+        }
+    }
+
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            loadTracks()
+        } else {
+            isLoading = false
+        }
     }
 
     val filteredTracks = remember(searchQuery, audioTracks.toList()) {
@@ -228,19 +268,47 @@ fun DeviceAudioPickerDialog(
                                 )
                             }
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "No Audio on Device Storage",
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "No songs or audio files were found on this phone's media storage.",
-                                color = TextMuted,
-                                fontSize = 12.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
+                            if (!hasPermission) {
+                                Text(
+                                    text = "Storage Permission Required",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Allow permission to scan audio, songs, and recordings stored on this phone.",
+                                    color = TextMuted,
+                                    fontSize = 12.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Button(
+                                    onClick = { permissionLauncher.launch(permissionToRequest) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth().testTag("grant_audio_permission_btn")
+                                ) {
+                                    Icon(imageVector = Icons.Default.Audiotrack, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Grant Audio Permission")
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            } else {
+                                Text(
+                                    text = "No Audio on Device Storage",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "No songs or audio files were found on this phone's media storage.",
+                                    color = TextMuted,
+                                    fontSize = 12.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {

@@ -159,6 +159,19 @@ class VaultRepository(
         storageManager.exportFile(File(item.filePath), targetUri)
     }
 
+    suspend fun restoreItemToGallery(item: MediaItem): Boolean = withContext(Dispatchers.IO) {
+        val success = storageManager.restoreToPublicGallery(
+            File(item.filePath),
+            item.fileName,
+            item.mediaType,
+            item.mimeType
+        )
+        if (success) {
+            deleteItem(item)
+        }
+        success
+    }
+
     suspend fun clearVault() = withContext(Dispatchers.IO) {
         storageManager.clearVault()
         mediaDao.deleteAllItems()

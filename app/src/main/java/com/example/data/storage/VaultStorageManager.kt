@@ -1,8 +1,12 @@
 package com.example.data.storage
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Log
 import com.example.data.model.MediaType
@@ -227,6 +231,54 @@ class VaultStorageManager(private val context: Context) {
             }
             true
         } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun restoreToPublicGallery(
+        sourceFile: File,
+        fileName: String,
+        mediaType: MediaType,
+        mimeType: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (!sourceFile.exists()) return@withContext false
+        try {
+            val resolver = context.contentResolver
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                    val relativePath = when (mediaType) {
+                        MediaType.PHOTO -> Environment.DIRECTORY_PICTURES + "/MediaVault_Restored"
+                        MediaType.VIDEO -> Environment.DIRECTORY_MOVIES + "/MediaVault_Restored"
+                        MediaType.AUDIO -> Environment.DIRECTORY_MUSIC + "/MediaVault_Restored"
+                    }
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+                }
+            }
+
+            val collectionUri = when (mediaType) {
+                MediaType.PHOTO -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                MediaType.VIDEO -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                MediaType.AUDIO -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            }
+
+            val destUri = resolver.insert(collectionUri, contentValues) ?: return@withContext false
+            resolver.openOutputStream(destUri)?.use { out ->
+                FileInputStream(sourceFile).use { input ->
+                    input.copyTo(out)
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(destUri, contentValues, null, null)
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("VaultStorageManager", "Restore to gallery failed: ${e.message}", e)
             false
         }
     }
