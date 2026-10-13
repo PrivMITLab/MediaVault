@@ -1,0 +1,6 @@
+{
+  "name": "MediaVault",
+  "description": "Completely private, offline media player and hidden vault for music, videos, and photos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

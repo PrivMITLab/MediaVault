@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Safe Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#6366F1"
+        android:strokeWidth="3.5"
+        android:pathData="M54,24 A30,30 0 1,1 53.9,24 Z" />
+    
+    <!-- Vault Dial Notches -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,18 L54,24 M54,84 L54,90 M18,54 L24,54 M84,54 L90,54"
+        android:strokeColor="#818CF8"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round" />
+
+    <!-- Inner Shield / Circle Background -->
+    <path
+        android:fillColor="#312E81"
+        android:pathData="M54,32 A22,22 0 1,1 53.9,32 Z" />
+
+    <!-- Media Play Icon in the Center -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,43 L66,54 L48,65 Z" />
+        
+    <!-- Top Padlock Shackle Arc -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#C7D2FE"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M46,28 C46,21 62,21 62,28" />
+</vector>
