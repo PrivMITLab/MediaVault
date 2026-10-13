@@ -54,12 +54,16 @@ class MediaPlaybackService : MediaSessionService() {
 
         PlayerManager.getInstance(applicationContext).attachPlayer(player)
 
-        // Android Contract: Immediately call startForeground to fulfill startForegroundService() requirement
-        startForegroundPlaybackNotification()
-
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                updateNotification()
+                if (isPlaying) {
+                    startForegroundPlaybackNotification()
+                } else {
+                    try {
+                        stopForeground(STOP_FOREGROUND_DETACH)
+                    } catch (_: Exception) {}
+                    updateNotification()
+                }
             }
 
             override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
@@ -70,7 +74,9 @@ class MediaPlaybackService : MediaSessionService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        startForegroundPlaybackNotification()
+        if (::player.isInitialized && player.isPlaying) {
+            startForegroundPlaybackNotification()
+        }
         return START_STICKY
     }
 

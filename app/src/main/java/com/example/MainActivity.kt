@@ -6,6 +6,9 @@ import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,13 +28,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.fragment.app.FragmentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.model.MediaItem
+import com.example.data.model.MediaType
 import com.example.ui.components.AddToPlaylistDialog
 import com.example.ui.components.CreatePlaylistDialog
 import com.example.ui.components.ImportProgressDialog
+import com.example.ui.components.ImportSourceDialog
 import com.example.ui.components.VaultBottomNavBar
 import com.example.ui.components.VaultTopBar
 import com.example.ui.screens.audio.AudioScreen
@@ -81,7 +84,11 @@ class MainActivity : FragmentActivity() {
 
                 LaunchedEffect(pendingShareUris) {
                     if (pendingShareUris.isNotEmpty()) {
-                        viewModel.importUris(pendingShareUris)
+                        viewModel.importUris(pendingShareUris) { success, _ ->
+                            if (success > 0) {
+                                Toast.makeText(this@MainActivity, "Shared files saved to vault", Toast.LENGTH_SHORT).show()
+                            }
+                        }
                         pendingShareUris = emptyList()
                     }
                 }
@@ -166,14 +173,59 @@ fun MainVaultScaffold(
     var pendingExportItem by remember { mutableStateOf<MediaItem?>(null) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var showImportSourceDialog by remember { mutableStateOf(false) }
 
-    // SAF File Import Launcher (Multiple documents: audio, video, photo)
-    val importLauncher = rememberLauncherForActivityResult(
+    fun processImportedUris(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        uris.forEach { uri ->
+            try {
+                app.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+        }
+        val targetType = when (selectedTab) {
+            VaultTab.AUDIO -> MediaType.AUDIO
+            VaultTab.VIDEO -> MediaType.VIDEO
+            VaultTab.PHOTOS -> MediaType.PHOTO
+            else -> null
+        }
+        viewModel.importUris(uris, targetType) { success, failed ->
+            val typeLabel = when (selectedTab) {
+                VaultTab.AUDIO -> "audio file"
+                VaultTab.VIDEO -> "video"
+                VaultTab.PHOTOS -> "photo"
+                else -> "item"
+            }
+            val msg = if (failed == 0) {
+                "Imported $success $typeLabel${if (success > 1) "s" else ""} into vault"
+            } else {
+                "Imported $success $typeLabel${if (success > 1) "s" else ""}, $failed failed"
+            }
+            Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Modern Android Photo Picker (zero-permission gallery with visual previews)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris: List<Uri> ->
+        processImportedUris(uris)
+    }
+
+    // Document Storage Access Framework (Files & SD Card)
+    val documentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            viewModel.importUris(uris)
-        }
+        processImportedUris(uris)
+    }
+
+    // Universal Content Picker (For Audio / Music / Any files)
+    val getContentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        processImportedUris(uris)
     }
 
     // SAF File Export Launcher
@@ -188,6 +240,36 @@ fun MainVaultScaffold(
             }
             pendingExportItem = null
         }
+    }
+
+    // Import Source Picker Dialog
+    if (showImportSourceDialog) {
+        ImportSourceDialog(
+            tab = selectedTab,
+            onDismiss = { showImportSourceDialog = false },
+            onSelectGallery = {
+                showImportSourceDialog = false
+                when (selectedTab) {
+                    VaultTab.PHOTOS -> photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                    VaultTab.VIDEO -> photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                    )
+                    VaultTab.AUDIO -> getContentLauncher.launch("audio/*")
+                    else -> getContentLauncher.launch("*/*")
+                }
+            },
+            onSelectFiles = {
+                showImportSourceDialog = false
+                when (selectedTab) {
+                    VaultTab.PHOTOS -> documentLauncher.launch(arrayOf("image/*", "*/*"))
+                    VaultTab.VIDEO -> documentLauncher.launch(arrayOf("video/*", "*/*"))
+                    VaultTab.AUDIO -> documentLauncher.launch(arrayOf("audio/*", "*/*"))
+                    else -> documentLauncher.launch(arrayOf("*/*"))
+                }
+            }
+        )
     }
 
     // Import Progress Modal
@@ -291,15 +373,7 @@ fun MainVaultScaffold(
         floatingActionButton = {
             if (selectedTab != VaultTab.SETTINGS && !isSelectionMode) {
                 FloatingActionButton(
-                    onClick = {
-                        val mimeTypes = when (selectedTab) {
-                            VaultTab.AUDIO -> arrayOf("audio/*")
-                            VaultTab.VIDEO -> arrayOf("video/*")
-                            VaultTab.PHOTOS -> arrayOf("image/*")
-                            else -> arrayOf("*/*")
-                        }
-                        importLauncher.launch(mimeTypes)
-                    },
+                    onClick = { showImportSourceDialog = true },
                     containerColor = IndigoPrimary,
                     contentColor = androidx.compose.ui.graphics.Color.White,
                     modifier = Modifier.testTag("import_media_fab")
@@ -321,7 +395,8 @@ fun MainVaultScaffold(
                     onExportItem = { item ->
                         pendingExportItem = item
                         exportLauncher.launch(item.fileName)
-                    }
+                    },
+                    onImportClick = { showImportSourceDialog = true }
                 )
 
                 VaultTab.VIDEO -> VideoScreen(
@@ -329,7 +404,8 @@ fun MainVaultScaffold(
                     onExportItem = { item ->
                         pendingExportItem = item
                         exportLauncher.launch(item.fileName)
-                    }
+                    },
+                    onImportClick = { showImportSourceDialog = true }
                 )
 
                 VaultTab.PHOTOS -> PhotoScreen(
@@ -337,7 +413,8 @@ fun MainVaultScaffold(
                     onExportItem = { item ->
                         pendingExportItem = item
                         exportLauncher.launch(item.fileName)
-                    }
+                    },
+                    onImportClick = { showImportSourceDialog = true }
                 )
 
                 VaultTab.SETTINGS -> SettingsScreen(

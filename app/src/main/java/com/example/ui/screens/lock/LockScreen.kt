@@ -26,9 +26,13 @@ import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,6 +83,8 @@ fun LockScreen(
 
     val shakeOffset = remember { Animatable(0f) }
 
+    var showBiometricSetupDialog by remember { mutableStateOf(false) }
+
     fun triggerShake() {
         coroutineScope.launch {
             shakeOffset.snapTo(0f)
@@ -89,16 +95,40 @@ fun LockScreen(
         }
     }
 
-    // Auto trigger biometric if enabled
-    LaunchedEffect(Unit) {
-        if (!isSetupMode && securityManager.isBiometricEnabled() && securityManager.canAuthenticateWithBiometrics()) {
-            (context as? FragmentActivity)?.let { activity ->
+    fun triggerBiometricAuth() {
+        val activity = context as? FragmentActivity
+        if (activity == null) {
+            errorMessage = "Unable to start biometric authentication"
+            return
+        }
+        val status = securityManager.getBiometricStatus()
+        when (status) {
+            com.example.security.SecurityManager.BiometricStatus.READY -> {
                 securityManager.showBiometricPrompt(
                     activity = activity,
                     onSuccess = { onUnlocked(false) },
                     onError = { errorMessage = it }
                 )
             }
+            com.example.security.SecurityManager.BiometricStatus.NOT_ENROLLED -> {
+                errorMessage = "No fingerprint or face enrolled in device settings"
+            }
+            com.example.security.SecurityManager.BiometricStatus.NO_HARDWARE -> {
+                errorMessage = "Biometrics not supported on this device"
+            }
+            com.example.security.SecurityManager.BiometricStatus.HARDWARE_UNAVAILABLE -> {
+                errorMessage = "Biometric sensor is currently unavailable"
+            }
+            else -> {
+                errorMessage = "Biometrics unavailable"
+            }
+        }
+    }
+
+    // Auto trigger biometric if enabled
+    LaunchedEffect(Unit) {
+        if (!isSetupMode && securityManager.isBiometricEnabled() && securityManager.canAuthenticateWithBiometrics()) {
+            triggerBiometricAuth()
         }
     }
 
@@ -139,9 +169,13 @@ fun LockScreen(
         } else {
             if (currentInput == initialEnteredPin) {
                 securityManager.setPin(currentInput)
-                isSetupMode = false
-                securityManager.unlock(false)
-                onUnlocked(false)
+                if (securityManager.isBiometricHardwareAvailable()) {
+                    showBiometricSetupDialog = true
+                } else {
+                    isSetupMode = false
+                    securityManager.unlock(false)
+                    onUnlocked(false)
+                }
             } else {
                 errorMessage = "PINs do not match. Try again."
                 currentInput = ""
@@ -262,8 +296,101 @@ fun LockScreen(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(top = 6.dp)
                 )
-            } else {
+            }
+
+            // Biometric Quick Unlock affordance
+            if (!isSetupMode && securityManager.isBiometricHardwareAvailable()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { triggerBiometricAuth() }
+                        .background(IndigoPrimary.copy(alpha = 0.15f))
+                        .border(1.dp, IndigoPrimary.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .testTag("biometric_quick_chip"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = "Unlock with Biometrics",
+                        tint = EmeraldAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Touch to Unlock with Biometrics",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else if (errorMessage == null) {
                 Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // Biometric Setup Dialog when first creating PIN
+            if (showBiometricSetupDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showBiometricSetupDialog = false
+                        isSetupMode = false
+                        securityManager.unlock(false)
+                        onUnlocked(false)
+                    },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Fingerprint,
+                            contentDescription = null,
+                            tint = EmeraldAccent,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    },
+                    title = {
+                        Text(
+                            text = "Enable Biometric Unlock?",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Use fingerprint or face recognition for instant, secure access to your media vault alongside your PIN.",
+                            color = TextSecondary,
+                            fontSize = 14.sp
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                securityManager.setBiometricEnabled(true)
+                                showBiometricSetupDialog = false
+                                isSetupMode = false
+                                securityManager.unlock(false)
+                                onUnlocked(false)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                            modifier = Modifier.testTag("enable_biometric_confirm_button")
+                        ) {
+                            Text("Enable Biometrics")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                securityManager.setBiometricEnabled(false)
+                                showBiometricSetupDialog = false
+                                isSetupMode = false
+                                securityManager.unlock(false)
+                                onUnlocked(false)
+                            }
+                        ) {
+                            Text("PIN Only", color = TextMuted)
+                        }
+                    },
+                    containerColor = SurfaceCard,
+                    shape = RoundedCornerShape(20.dp)
+                )
             }
 
             if (isSetupMode && currentInput.length >= 4) {
@@ -304,28 +431,22 @@ fun LockScreen(
                         row.forEach { key ->
                             when (key) {
                                 "bio" -> {
-                                    if (!isSetupMode && securityManager.isBiometricEnabled() && securityManager.canAuthenticateWithBiometrics()) {
+                                    if (!isSetupMode && securityManager.isBiometricHardwareAvailable()) {
                                         KeypadButton(
-                                            onClick = {
-                                                (context as? FragmentActivity)?.let { act ->
-                                                    securityManager.showBiometricPrompt(
-                                                        activity = act,
-                                                        onSuccess = { onUnlocked(false) },
-                                                        onError = { errorMessage = it }
-                                                    )
-                                                }
-                                            },
+                                            onClick = { triggerBiometricAuth() },
                                             content = {
                                                 Icon(
                                                     imageVector = Icons.Default.Fingerprint,
                                                     contentDescription = "Biometric Unlock",
-                                                    tint = IndigoPrimary,
-                                                    modifier = Modifier.size(28.dp)
+                                                    tint = EmeraldAccent,
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .testTag("keypad_biometric_button")
                                                 )
                                             }
                                         )
                                     } else {
-                                        Spacer(modifier = Modifier.size(64.dp))
+                                        Spacer(modifier = Modifier.size(68.dp))
                                     }
                                 }
 

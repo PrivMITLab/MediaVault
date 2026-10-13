@@ -76,7 +76,8 @@ import com.example.ui.viewmodel.ViewMode
 fun AudioScreen(
     viewModel: VaultViewModel,
     playerManager: PlayerManager,
-    onExportItem: (MediaItem) -> Unit
+    onExportItem: (MediaItem) -> Unit,
+    onImportClick: () -> Unit
 ) {
     val audioList by viewModel.filteredAudio.collectAsState()
     val recentlyPlayed by viewModel.recentlyPlayed.collectAsState()
@@ -161,6 +162,23 @@ fun AudioScreen(
                         fontSize = 13.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    androidx.compose.material3.Button(
+                        onClick = onImportClick,
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = IndigoPrimary
+                        ),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("empty_state_import_audio_btn")
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.Audiotrack,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Import Audio", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         } else {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -500,6 +501,130 @@ fun AddToPlaylistDialog(
         shape = RoundedCornerShape(20.dp)
     )
 }
+
+@Composable
+fun ImportSourceDialog(
+    tab: com.example.ui.viewmodel.VaultTab,
+    onDismiss: () -> Unit,
+    onSelectGallery: () -> Unit,
+    onSelectFiles: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.PlaylistAdd,
+                    contentDescription = null,
+                    tint = IndigoPrimary,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(
+                    text = when (tab) {
+                        com.example.ui.viewmodel.VaultTab.AUDIO -> "Import Audio"
+                        com.example.ui.viewmodel.VaultTab.VIDEO -> "Import Video"
+                        com.example.ui.viewmodel.VaultTab.PHOTOS -> "Import Photos"
+                        else -> "Import Media"
+                    },
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    "Choose source to import into vault:",
+                    color = TextSecondary,
+                    fontSize = 14.sp
+                )
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onSelectGallery() }
+                        .testTag("import_source_primary"),
+                    color = Color(0xFF161A23),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (tab == com.example.ui.viewmodel.VaultTab.AUDIO) Icons.Default.GraphicEq else Icons.Default.Info,
+                            contentDescription = null,
+                            tint = IndigoPrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = if (tab == com.example.ui.viewmodel.VaultTab.AUDIO) "Audio / Music Picker" else "Gallery / Media Photos & Videos",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (tab == com.example.ui.viewmodel.VaultTab.AUDIO) "Select songs, voice notes, audio files" else "Select pictures or videos directly",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onSelectFiles() }
+                        .testTag("import_source_documents"),
+                    color = Color(0xFF161A23),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = EmeraldAccent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Device Storage & Documents (Files)",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = "Browse file manager, downloads, SD card",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        },
+        containerColor = SurfaceCard,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
 
 fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0 B"

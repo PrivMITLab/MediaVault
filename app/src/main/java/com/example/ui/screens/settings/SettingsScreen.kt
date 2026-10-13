@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -75,6 +76,7 @@ fun SettingsScreen(
     securityManager: SecurityManager,
     onLockNow: () -> Unit
 ) {
+    val context = LocalContext.current
     val totalSize by viewModel.totalVaultSize.collectAsState()
     val audioItems by viewModel.rawAudio.collectAsState(emptyList())
     val videoItems by viewModel.rawVideos.collectAsState(emptyList())
@@ -565,33 +567,87 @@ fun SettingsScreen(
                     Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
                 }
 
-                // Biometrics Toggle
-                if (securityManager.canAuthenticateWithBiometrics()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null, tint = IndigoPrimary)
+                // Biometrics Toggle & Hardware Status
+                val biometricStatus = remember { securityManager.getBiometricStatus() }
+                when (biometricStatus) {
+                    com.example.security.SecurityManager.BiometricStatus.READY -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null, tint = EmeraldAccent)
+                                Column(modifier = Modifier.padding(start = 12.dp)) {
+                                    Text("Biometric Unlock", color = TextPrimary, fontWeight = FontWeight.Medium)
+                                    Text("Fingerprint & Face Recognition", color = TextMuted, fontSize = 12.sp)
+                                }
+                            }
+                            Switch(
+                                checked = biometricEnabled,
+                                onCheckedChange = {
+                                    biometricEnabled = it
+                                    securityManager.setBiometricEnabled(it)
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = IndigoPrimary
+                                )
+                            )
+                        }
+                    }
+                    com.example.security.SecurityManager.BiometricStatus.NOT_ENROLLED -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    (context as? androidx.fragment.app.FragmentActivity)?.let {
+                                        securityManager.openBiometricEnrollment(it)
+                                    }
+                                }
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null, tint = IndigoPrimary)
+                                Column(modifier = Modifier.padding(start = 12.dp)) {
+                                    Text("Biometric Unlock", color = TextPrimary, fontWeight = FontWeight.Medium)
+                                    Text("Sensor ready • Tap to enroll fingerprint/face in Settings", color = EmeraldAccent, fontSize = 12.sp)
+                                }
+                            }
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    com.example.security.SecurityManager.BiometricStatus.HARDWARE_UNAVAILABLE -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null, tint = TextMuted)
                             Column(modifier = Modifier.padding(start = 12.dp)) {
-                                Text("Biometric Unlock", color = TextPrimary, fontWeight = FontWeight.Medium)
-                                Text("Fingerprint & Face Recognition", color = TextMuted, fontSize = 12.sp)
+                                Text("Biometric Unlock", color = TextMuted, fontWeight = FontWeight.Medium)
+                                Text("Sensor temporarily busy or unavailable", color = TextMuted, fontSize = 12.sp)
                             }
                         }
-                        Switch(
-                            checked = biometricEnabled,
-                            onCheckedChange = {
-                                biometricEnabled = it
-                                securityManager.setBiometricEnabled(it)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = IndigoPrimary
-                            )
-                        )
+                    }
+                    else -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null, tint = TextMuted)
+                            Column(modifier = Modifier.padding(start = 12.dp)) {
+                                Text("Biometric Unlock", color = TextMuted, fontWeight = FontWeight.Medium)
+                                Text("Biometric hardware not detected on this device", color = TextMuted, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
 

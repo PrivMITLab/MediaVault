@@ -223,7 +223,11 @@ class VaultViewModel(
         }
     }
 
-    fun importUris(uris: List<Uri>) {
+    fun importUris(
+        uris: List<Uri>,
+        targetType: MediaType? = null,
+        onComplete: ((success: Int, failed: Int) -> Unit)? = null
+    ) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
             _importProgress.value = ImportProgressState(
@@ -234,21 +238,27 @@ class VaultViewModel(
                 totalBytes = 0L
             )
 
+            var successCount = 0
+            var failedCount = 0
+
             uris.forEachIndexed { index, uri ->
                 _importProgress.value = _importProgress.value.copy(currentFileIndex = index + 1)
                 try {
-                    repository.importFile(uri) { copied, total ->
+                    repository.importFile(uri, targetType) { copied, total ->
                         _importProgress.value = _importProgress.value.copy(
                             bytesCopied = copied,
                             totalBytes = total
                         )
                     }
-                } catch (_: Exception) {
-                    // Continue importing other files if one fails
+                    successCount++
+                } catch (e: Exception) {
+                    android.util.Log.e("VaultViewModel", "Failed to import uri: $uri", e)
+                    failedCount++
                 }
             }
 
             _importProgress.value = ImportProgressState(isImporting = false)
+            onComplete?.invoke(successCount, failedCount)
         }
     }
 

@@ -45,9 +45,10 @@ class VaultRepository(
 
     suspend fun importFile(
         uri: Uri,
+        targetMediaTypeHint: MediaType? = null,
         onProgress: ((copied: Long, total: Long) -> Unit)? = null
     ): MediaItem = withContext(Dispatchers.IO) {
-        val result = storageManager.importFile(uri, onProgress)
+        val result = storageManager.importFile(uri, targetMediaTypeHint, onProgress)
         val extractedMetadata = extractMetadata(result)
         val entity = MediaItem(
             filePath = result.file.absolutePath,

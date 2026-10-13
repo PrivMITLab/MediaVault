@@ -83,13 +83,9 @@ class PlayerManager private constructor(private val context: Context) {
     fun ensureServiceStarted() {
         val intent = Intent(context, MediaPlaybackService::class.java)
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startService(intent)
         } catch (_: Exception) {
-            // Handled if already bound or background execution restricted
+            // Handled if already running or restricted
         }
     }
 
