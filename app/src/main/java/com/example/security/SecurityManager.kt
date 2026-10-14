@@ -166,7 +166,7 @@ class SecurityManager(private val context: Context) {
 
     // Biometrics
     fun isBiometricEnabled(): Boolean {
-        return prefs.getBoolean(KEY_BIOMETRIC_ENABLED, false)
+        return prefs.getBoolean(KEY_BIOMETRIC_ENABLED, true)
     }
 
     fun setBiometricEnabled(enabled: Boolean) {
@@ -197,6 +197,20 @@ class SecurityManager(private val context: Context) {
 
     fun canAuthenticateWithBiometrics(): Boolean {
         return getBiometricStatus() == BiometricStatus.READY
+    }
+
+    fun canAuthenticateWithDeviceCredential(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val biometricManager = BiometricManager.from(context)
+            biometricManager.canAuthenticate(BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+        } else {
+            val keyguardManager = context.getSystemService(android.content.Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            keyguardManager?.isDeviceSecure == true
+        }
+    }
+
+    fun canAuthenticateSystemLock(): Boolean {
+        return canAuthenticateWithBiometrics() || canAuthenticateWithDeviceCredential()
     }
 
     fun isBiometricHardwareAvailable(): Boolean {
@@ -263,23 +277,12 @@ class SecurityManager(private val context: Context) {
 
     fun showBiometricPrompt(
         activity: FragmentActivity,
-        title: String = "MediaVault Unlock",
-        subtitle: String = "Verify fingerprint or face to unlock",
+        title: String = "MediaVault Authentication",
+        subtitle: String = "Verify fingerprint or screen lock to open vault",
+        allowDeviceCredential: Boolean = true,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        if (!canAuthenticateWithBiometrics()) {
-            val status = getBiometricStatus()
-            val reason = when (status) {
-                BiometricStatus.NOT_ENROLLED -> "No fingerprint or face enrolled in device settings"
-                BiometricStatus.NO_HARDWARE -> "Device does not support biometrics"
-                BiometricStatus.HARDWARE_UNAVAILABLE -> "Biometric hardware is busy or unavailable"
-                else -> "Biometric authentication is not ready"
-            }
-            onError(reason)
-            return
-        }
-
         val executor = ContextCompat.getMainExecutor(activity)
         val prompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
@@ -301,19 +304,48 @@ class SecurityManager(private val context: Context) {
 
             override fun onAuthenticationFailed() {
                 super.onAuthenticationFailed()
-                onError("Biometric not recognized. Try again or enter PIN.")
+                onError("Biometric not recognized. Please try again.")
             }
         })
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .setNegativeButtonText("Use PIN")
-            .setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
-            )
-            .build()
+        val canUseDeviceCredential = allowDeviceCredential && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R
+        try {
+            val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(title)
+                .setSubtitle(subtitle)
 
-        prompt.authenticate(promptInfo)
+            if (canUseDeviceCredential) {
+                // Google Photos Locked Folder style: allow both Biometric and Device Screen Lock PIN/Pattern
+                promptInfoBuilder.setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                )
+            } else {
+                promptInfoBuilder.setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+                )
+                promptInfoBuilder.setNegativeButtonText("Use Vault PIN")
+            }
+
+            prompt.authenticate(promptInfoBuilder.build())
+        } catch (_: Exception) {
+            // Fallback to strong/weak with negative button
+            try {
+                val fallbackPromptInfo = BiometricPrompt.PromptInfo.Builder()
+                    .setTitle(title)
+                    .setSubtitle(subtitle)
+                    .setNegativeButtonText("Use Vault PIN")
+                    .setAllowedAuthenticators(
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        BiometricManager.Authenticators.BIOMETRIC_WEAK
+                    )
+                    .build()
+                prompt.authenticate(fallbackPromptInfo)
+            } catch (fallbackEx: Exception) {
+                onError(fallbackEx.localizedMessage ?: "Biometric prompt unavailable")
+            }
+        }
     }
 }
